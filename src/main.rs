@@ -71,50 +71,80 @@ struct Settings {
 /// Fields should always be in alphabetical order
 #[derive(Debug)]
 struct VesselInfo {
-    /// Dimension to Bow (meters)
+    /// Dimension to Bow (meters). If unknown, value is zero
     a:  u64,
-    /// Dimension to Stern (meters)
+    /// Dimension to Stern (meters). If unknown, value is zero
     b:  u64,
-    /// Dimension to Port (meters)
+    /// Dimension to Port (meters). If unknown, value is zero
     c:  u64,
-    /// vessel’s callsign
+    /// vessel’s callsign. If unknown, value is empty string
     callsign:   String,
     /// Course Over Ground AIS format – in 1/10 degrees i.e. degrees multiplied by 10. COG=3600 means “not available” Human readable format – degrees. COG=360.0 means “not available” 
-    cog:    u64,
-    /// Dimension to Starboard (meters)
+    cog:    f64,
+    /// Dimension to Starboard (meters). If unknown, value is zero
     d:  u64,
-    /// vessel’s destination
+    /// vessel’s destination. If unknown, value is empty string
     dest:   String,
-    /// AIS format – in 1/10 meters i.e. draught multiplied by 10. Human readable format – meters
+    /// AIS format – in 1/10 meters i.e. draught multiplied by 10. Human readable format – meters. If unknown, value is zero
     draught:    u64,
-    /// positioning device type 
+    /// positioning device type. If unknown, value is empty string
     device:    String,
-    /// Estimated Time of Arrival. AIS format (see here link broken at 2025-10-22). Human readable format – UTC date/time
+    /// Estimated Time of Arrival. AIS format (see here link broken at 2025-10-22). Human readable format – UTC date/time. If unknown, value is zero
     eta:    u64,
     /// current heading of the AIS vessel at the time of the last message value in degrees, HEADING=511 means “not available”
     heading:    u64,
-    /// IMO ship identification number 
+    /// IMO ship identification number. If unknown, value is zero
     imo:    u64,
-    /// geographical longitude AIS format – in 1/10000 minute i.e. degrees multiplied by 600000 Human readable format – degrees 
-    longitude:  String,
-    /// geographical latitude AIS format – in 1/10000 minute i.e. degrees multiplied by 600000 Human readable format – degrees 
+    /// geographical latitude AIS format – in 1/10000 minute i.e. degrees multiplied by 600000 Human readable format – degrees. If unknown, value is empty string
     latitude:   String,
-    /// Maritime Mobile Service Identity 
+    /// geographical longitude AIS format – in 1/10000 minute i.e. degrees multiplied by 600000 Human readable format – degrees. If unknown, value is empty string
+    longitude:  String,
+    /// Maritime Mobile Service Identity. If unknown, value is zero
     mmsi:   u64,
-    /// vessel’s name (max.20 chars)
+    /// vessel’s name (max.20 chars). If unknown, value is empty string
     name:   String,
-    /// Navigational Status 
+    /// Navigational Status. If unknown, value is empty string
     navstat:    String,
-    /// (AIS format only) – Position Accuracy 0 – low accuracy 1 – high accuracy
+    /// (AIS format only) – Position Accuracy 0 – low accuracy 1 – high accuracy. If unknown, low accuracy is assumed and value is zero
     pac:   u8,
-    /// (AIS format only) - Rate of Turn
+    /// (AIS format only) - Rate of Turn. If unknown, value is empty string
     rot:    String,
     /// Speed Over Ground AIS format – in 1/10 knots i.e. knots multiplied by 10. SOG=1024 means “not available” Human readable format – knots. SOG=102.4 means “not available” 
     sog:    u64,
-    ///  	data timestamp AIS format – unix timestamp Human readable format – UTC
+    ///  	data timestamp AIS format – unix timestamp Human readable format – UTC. If unknown, value is zero
     timestamp: u64,
-    /// vessel’s type
+    /// vessel’s type. If unknown, value is zero
     vessel_type:   u64,
+}
+
+impl VesselInfo {
+    /// Creates a new VesselInfo struct with default AIS format values indicating unknown data
+    fn new() -> VesselInfo {
+        VesselInfo {
+            a: 0,
+            b: 0,
+            c: 0,
+            callsign: String::new(),
+            cog: 3600.0,
+            d: 0,
+            dest: String::new(),
+            draught: 0,
+            device: String::new(),
+            eta: 0,
+            heading: 511,
+            imo: 0,
+            latitude: String::new(),
+            longitude: String::new(),
+            mmsi: 0,
+            name: String::new(),
+            navstat: String::new(),
+            pac: 0,
+            rot: String::new(),
+            sog: 1024,
+            timestamp: 0,
+            vessel_type: 0,
+        }
+    }
 }
 
 
@@ -267,6 +297,7 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
     let headers = rdr.headers().unwrap().clone();
     let header_order = get_header_order(&headers);
 
+    println!("Headers: {:?}", headers);
     println!("Header order: {:?}", header_order);
 
     // Init empty vector to hold data
@@ -280,35 +311,104 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
                 panic!("Error reading record from CSV response: {}", e);
             }
         };
+
+        println!("Record: {:?}", record);
         
-        // Create VesselInfo struct from record
-        // let vessel_info = VesselInfo {
-        //     a:  ,
-        //     b:  ,
-        //     c:  ,
-        //     callsign:   ,
-        //     cog:    ,
-        //     d:  ,
-        //     dest:   ,
-        //     draught:    ,
-        //     device:    ,
-        //     eta:    ,
-        //     heading:    ,
-        //     imo:    ,
-        //     longitude:  ,
-        //     latitude:   ,
-        //     mmsi:   record[0].parse().unwrap_or(0),
-        //     name:   ,
-        //     navstat:    ,
-        //     pac:   ,
-        //     rot:    ,
-        //     sog:    ,
-        //     timestamp: record[1].parse().unwrap_or(0),
-        //     vessel_type:   ,
-        //     };
+        // Create default VesselInfo struct
+        let mut vessel_info = VesselInfo::new();
+
+        // Fill in values that exist based on header order
+        match header_order[0] {
+            Some(index) => vessel_info.a = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[1] {
+            Some(index) => vessel_info.b = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[2] {
+            Some(index) => vessel_info.c = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[3] {
+            Some(index) => vessel_info.callsign = record[index].to_string(),
+            None => {}
+        }
+        match header_order[4] {
+            Some(index) => vessel_info.cog = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[5] {
+            Some(index) => vessel_info.d = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[6] {
+            Some(index) => vessel_info.dest = record[index].to_string(),
+            None => {}
+        }
+        match header_order[7] {
+            Some(index) => vessel_info.draught = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[8] {
+            Some(index) => vessel_info.device = record[index].to_string(),
+            None => {}
+        }
+        match header_order[9] {
+            Some(index) => vessel_info.eta = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[10] {
+            Some(index) => vessel_info.heading = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[11] {
+            Some(index) => vessel_info.imo = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[12] {
+            Some(index) => vessel_info.latitude = record[index].to_string(),
+            None => {}
+        }
+        match header_order[13] {
+            Some(index) => vessel_info.longitude = record[index].to_string(),
+            None => {}
+        }
+        match header_order[14] {
+            Some(index) => vessel_info.mmsi = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[15] {
+            Some(index) => vessel_info.name = record[index].to_string(),
+            None => {}
+        }
+        match header_order[16] {
+            Some(index) => vessel_info.navstat = record[index].to_string(),
+            None => {}
+        }
+        match header_order[17] {
+            Some(index) => vessel_info.pac = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[18] {
+            Some(index) => vessel_info.rot = record[index].to_string(),
+            None => {}
+        }
+        match header_order[19] {
+            Some(index) => vessel_info.sog = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[20] {
+            Some(index) => vessel_info.timestamp = record[index].parse().unwrap(),
+            None => {}
+        }
+        match header_order[21] {
+            Some(index) => vessel_info.vessel_type = record[index].parse().unwrap(),
+            None => {}
+        }
 
         // Append to data vector
-        // data.push(vessel_info);
+        data.push(vessel_info);
     }
 
     // Return the data vector
