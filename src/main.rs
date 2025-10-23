@@ -35,7 +35,7 @@ fn main() {
         update_interval = settings.update_interval;
 
         // Make URL
-        let url = make_aishub_url(settings.api_key.as_str(), settings.data_value_format, settings.output_format.as_str(), settings.compression, settings.min_lat, settings.max_lat, settings.min_lon, settings.max_lon, mmsi.as_deref(), imo.as_deref(), None);
+        let url = make_aishub_url(settings.api_key.as_str(), settings.data_value_format, settings.output_format.as_str(), settings.compression, settings.lat_min, settings.lat_max, settings.lon_min, settings.lon_max, mmsi.as_deref(), imo.as_deref(), settings.age_max);
 
         // Collect data using API
         let data = get_data_from_aishub_api(url);
@@ -63,10 +63,10 @@ struct Settings {
     data_value_format: u8,
     output_format: String,
     compression: u8,
-    lat_min: Option<f32>,
-    lat_max: Option<f32>,
-    lon_min: Option<f32>,
-    lon_max: Option<f32>,
+    lat_min: Option<f64>,
+    lat_max: Option<f64>,
+    lon_min: Option<f64>,
+    lon_max: Option<f64>,
     age_max: Option<u64>
 }
 
@@ -232,23 +232,23 @@ fn vec_to_comma_separated_string(vec: &Vec<String>) -> Option<String> {
 
 /// Makes the URL for the AISHub API request
 /// Based on https://www.aishub.net/api
-fn make_aishub_url(api_key: &str, data_value_format: u8, output_format: &str, compression: u8, latmin: Option<f64>, latmax: Option<f64>, lonmin: Option<f64>, lonmax: Option<f64>, mmsi: Option<&str>, imo: Option<&str>, interval: Option<u32>) -> String {
+fn make_aishub_url(api_key: &str, data_value_format: u8, output_format: &str, compression: u8, lat_min: Option<f64>, lat_max: Option<f64>, lon_min: Option<f64>, lon_max: Option<f64>, mmsi: Option<&str>, imo: Option<&str>, age_max: Option<u64>) -> String {
     let mut url = format!("https://data.aishub.net/ws.php?username={}&format={}&output={}&compress={}", api_key, data_value_format, output_format, compression);
 
     // Add optional parameters
-    match latmin {
+    match lat_min {
         Some(value) => url.push_str(&format!("&latmin={}", value)),
         None => {}
     }
-    match latmax {
+    match lat_max {
         Some(value) => url.push_str(&format!("&latmax={}", value)),
         None => {}
     }
-    match lonmin {
+    match lon_min {
         Some(value) => url.push_str(&format!("&lonmin={}", value)),
         None => {}
     }
-    match lonmax {
+    match lon_max {
         Some(value) => url.push_str(&format!("&lonmax={}", value)),
         None => {}
     }
@@ -260,7 +260,7 @@ fn make_aishub_url(api_key: &str, data_value_format: u8, output_format: &str, co
         Some(value) => url.push_str(&format!("&imo={}", value)),
         None => {}
     }
-    match interval {
+    match age_max {
         Some(value) => url.push_str(&format!("&interval={}", value)),
         None => {}
     }
