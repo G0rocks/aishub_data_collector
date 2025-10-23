@@ -4,9 +4,9 @@
     "data_value_format": 0,
     "output_format": "csv",
     "compression": null,
-    "min_lat": null,
-    "max_lat": null,
-    "min_lon": null,
-    "max_lon": null,
-    "max_age": null
+    "lat_min": null,
+    "lat_max": null,
+    "lon_min": null,
+    "lon_max": null,
+    "age_max": null
 }

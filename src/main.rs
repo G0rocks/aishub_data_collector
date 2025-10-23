@@ -18,31 +18,35 @@ fn main() {
     let start_time = time::UtcDateTime::now();
 
     // Init default update_interval (in minutes)
-    let mut update_interval: u32 = 1;
+    let mut update_interval: u32;
+
+    // Get list of ships to monitor
+    let (imo_nums, mmsi_nums) = get_list_of_ships();
+    let imo = vec_to_comma_separated_string(&imo_nums);
+    let mmsi = vec_to_comma_separated_string(&mmsi_nums);
 
     // Infinite loop to collect data periodically
     loop {
         // Print status message
-        println!("Collecting data from AISHub at {:?} for {}", time::UtcDateTime::now(), time::UtcDateTime::now() - start_time);
+        println!("{:?} - Collecting data from AISHub for {}", time::UtcDateTime::now(), time::UtcDateTime::now() - start_time);
         // Get settings from settings file
         let settings = get_settings();
         // Update update_interval from settings
         update_interval = settings.update_interval;
 
-        // Get list of ships to monitor
-        let (imo_nums, mmsi_nums) = get_list_of_ships();
-        let imo = vec_to_comma_separated_string(&imo_nums);
-        let mmsi = vec_to_comma_separated_string(&mmsi_nums);
-
         // Make URL
-        let url = make_aishub_url(settings.api_key.as_str(), settings.data_value_format, settings.output_format.as_str(), settings.compression, None, None, None, None, mmsi.as_deref(), imo.as_deref(), None);
-        println!("AISHub URL: {}", url);
+        let url = make_aishub_url(settings.api_key.as_str(), settings.data_value_format, settings.output_format.as_str(), settings.compression, settings.min_lat, settings.max_lat, settings.min_lon, settings.max_lon, mmsi.as_deref(), imo.as_deref(), None);
 
         // Collect data using API
         let data = get_data_from_aishub_api(url);
 
         // Store data in database
-        save_data(data);
+        match save_data(data) {
+            Ok(_) => {},
+            Err(e) => {
+                panic!("Error saving data to database: {}", e);
+            }
+        };
 
         // Wait until next interval
         std::thread::sleep(std::time::Duration::from_secs((update_interval * 60) as u64));
@@ -59,11 +63,11 @@ struct Settings {
     data_value_format: u8,
     output_format: String,
     compression: u8,
-    min_lat: Option<f32>,
-    max_lat: Option<f32>,
-    min_lon: Option<f32>,
-    max_lon: Option<f32>,
-    max_age: Option<u64>
+    lat_min: Option<f32>,
+    lat_max: Option<f32>,
+    lon_min: Option<f32>,
+    lon_max: Option<f32>,
+    age_max: Option<u64>
 }
 
 /// The ship info received from AISHub API
@@ -148,7 +152,6 @@ impl VesselInfo {
 }
 
 
-
 // Functions
 // --------------------------------------------------------------------------------------
 
@@ -206,7 +209,6 @@ fn get_list_of_ships() -> (Vec<String>, Vec<String>) {
     // Return tuple of vectors
     return (imo, mmsi);
 }
-
 
 /// Takes in a vector of strings and returns a single string with commas between the values
 /// E.g. ["123", "456", "789"] -> "123,456,789"
@@ -297,9 +299,6 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
     let headers = rdr.headers().unwrap().clone();
     let header_order = get_header_order(&headers);
 
-    println!("Headers: {:?}", headers);
-    println!("Header order: {:?}", header_order);
-
     // Init empty vector to hold data
     let mut data: Vec<VesselInfo> = Vec::new();
 
@@ -311,8 +310,6 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
                 panic!("Error reading record from CSV response: {}", e);
             }
         };
-
-        println!("Record: {:?}", record);
         
         // Create default VesselInfo struct
         let mut vessel_info = VesselInfo::new();
@@ -415,7 +412,6 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
     return data;
 }
 
-
 /// Gets the order of headers in the CSV response
 /// Returns a vector where the first value is the index of the first value in the VesselInfo struct, second value is the index of the second value, etc.
 /// Based on the VesselInfo struct definition (alphabetical order) and https://www.aishub.net/api
@@ -459,16 +455,175 @@ fn get_header_order(headers: &csv::StringRecord) -> Vec<Option<usize>> {
 /// Function that saves the data to the database
 /// If the files don't exist, creates them
 /// If the files already exist, appends to them
-fn save_data(data: Vec<VesselInfo>) {
-    // Placeholder function to save data to database
-    println!("Saving data to database: {:?}", data);
-        //let response = reqwest::blocking::get(url)?;
-        //let content = response.bytes()?;
-//
-        //let mut file = File::create(filename)?;
-        //file.write_all(&content)?;
-    //
-        //println!("Saved CSV to {}", filename);
-        //Ok(())
+/// Note: Prioritizes IMO number over MMSI number, so if both exist, saves to IMO file only
+fn save_data(data: Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if data folder exists, if not, create it
+    if !std::path::Path::new("data").exists() {
+        fs::create_dir("data")?;
+    }
 
+    // Move to data folder
+    std::env::set_current_dir("data")?;
+
+    // Check if imo folder exists, if not create it
+    if !std::path::Path::new("imo").exists() {
+        fs::create_dir("imo")?;
+    }
+
+    // Check if mmsi folder exists, if not create it
+    if !std::path::Path::new("mmsi").exists() {
+        fs::create_dir("mmsi")?;
+    }
+
+    // Loop through data vector for each vessel
+    for vessel in data {
+        // if IMO number exists, enter imo folder
+        if vessel.imo != 0 {
+            // Enter folder
+            std::env::set_current_dir("imo")?;
+
+            // Check if file exists, if not create it with headers
+            if !std::path::Path::new(&format!("{}.csv", vessel.imo)).exists() {
+                // Create file with headers
+                make_empty_csv_file(format!("{}.csv", vessel.imo).as_str())?;
+            }
+         
+            // Make csv file reader
+            let reader = csv::Reader::from_path(format!("{}.csv", vessel.imo).as_str())?;
+
+            // Get latest timestamp in last line of file
+            let latest_timestamp: u64 = match reader.into_records().last() {
+                Some(Ok(record)) => record.get(20).unwrap().parse()?,
+                Some(Err(e)) => {
+                    return Err(Box::from(format!("Error reading record from CSV file: {}", e)));
+                }
+                None => 0, // If file is empty, set latest timestamp to 0
+            };
+
+            // Check latest entry timestamp in file to avoid duplicates
+            if vessel.timestamp <= latest_timestamp {
+                // Exit back to data folder
+                std::env::set_current_dir("..")?;
+                continue; // Skip to next vessel
+            }
+
+            // Make file csv writer
+            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(format!("{}.csv", vessel.imo).as_str())?);
+
+            // Append data to file
+            match write_data_to_file(&mut wtr, &vessel) {
+                Ok(_) => {},
+                Err(e) => {
+                    return Err(Box::from(format!("Error writing data to CSV file: {}", e)));
+                }
+            };
+
+            // Exit back to data folder
+            std::env::set_current_dir("..")?;
+        }
+        // if MMSI number exists, enter mmsi folder
+        else if vessel.mmsi != 0 {
+            // Enter folder
+            std::env::set_current_dir("mmsi")?;
+
+            // Check if file exists, if not create it with headers
+            if !std::path::Path::new(&format!("{}.csv", vessel.mmsi)).exists() {
+                // Create file with headers
+                make_empty_csv_file(format!("{}.csv", vessel.mmsi).as_str())?;
+            }
+         
+            // Make csv file reader
+            let reader = csv::Reader::from_path(format!("{}.csv", vessel.mmsi).as_str())?;
+
+            // Get latest timestamp in last line of file
+            let latest_timestamp: u64 = match reader.into_records().last() {
+                Some(Ok(record)) => record.get(20).unwrap().parse()?,
+                Some(Err(e)) => {
+                    return Err(Box::from(format!("Error reading record from CSV file: {}", e)));
+                }
+                None => 0, // If file is empty, set latest timestamp to 0
+            };
+
+            // Check latest entry timestamp in file to avoid duplicates
+            if vessel.timestamp <= latest_timestamp {
+                // Exit back to data folder
+                std::env::set_current_dir("..")?;
+                continue; // Skip to next vessel
+            }
+
+            // Make file csv writer
+            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(format!("{}.csv", vessel.mmsi).as_str())?);
+
+            // Append data to file
+            match write_data_to_file(&mut wtr, &vessel) {
+                Ok(_) => {},
+                Err(e) => {
+                    return Err(Box::from(format!("Error writing data to CSV file: {}", e)));
+                }
+            };
+
+            // Exit back to data folder
+            std::env::set_current_dir("..")?;
+        }
+    }
+
+    // Exit data folder
+    std::env::set_current_dir("..")?;
+
+    // Return Ok
+    return Ok(());
+}
+
+
+
+/// Makes a new empty .csv file with the correct headers in the correct order
+fn make_empty_csv_file(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Sanity check the file_path ends with ".csv"
+    if !file_path.ends_with(".csv") {
+        return Err(Box::from("File path must end with .csv"));
+    }
+
+    // Create CSV writer
+    let mut wtr = csv::Writer::from_path(file_path)?;
+
+    // Write headers
+    wtr.write_record(&["A", "B", "C", "CALLSIGN", "COG", "D", "DEST", "DRAUGHT", "DEVICE", "ETA", "HEADING", "IMO", "LATITUDE", "LONGITUDE", "MMSI", "NAME", "NAVSTAT", "PAC", "ROT", "SOG", "TSTAMP", "TYPE"])?;
+    wtr.flush()?;
+
+    // Return Ok
+    return Ok(());
+}
+
+
+/// Writes data to file given a csv writer
+fn write_data_to_file(wtr: &mut csv::Writer<std::fs::File>, vessel: &VesselInfo) -> Result<(), Box<dyn std::error::Error>> {
+    // Write record
+    wtr.write_record(&[
+        vessel.a.to_string(),
+        vessel.b.to_string(),
+        vessel.c.to_string(),
+        vessel.callsign.clone(),
+        vessel.cog.to_string(),
+        vessel.d.to_string(),
+        vessel.dest.clone(),
+        vessel.draught.to_string(),
+        vessel.device.clone(),
+        vessel.eta.to_string(),
+        vessel.heading.to_string(),
+        vessel.imo.to_string(),
+        vessel.latitude.clone(),
+        vessel.longitude.clone(),
+        vessel.mmsi.to_string(),
+        vessel.name.clone(),
+        vessel.navstat.clone(),
+        vessel.pac.to_string(),
+        vessel.rot.clone(),
+        vessel.sog.to_string(),
+        vessel.timestamp.to_string(),
+        vessel.vessel_type.to_string()
+    ])?;
+    wtr.flush()?;
+
+    // Return Ok
+    return Ok(());
 }
