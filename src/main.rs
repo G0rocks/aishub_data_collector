@@ -5,11 +5,17 @@
 
 // Crate imports
 use serde::Deserialize; // For deserializing JSON
+use serde::Serialize; // For serializing JSON
 use serde_json;      // For parsing JSON
 use csv;             // For reading CSV files
 use std::fs;        // For file system operations
 use reqwest;      // For making HTTP requests
 use time;     // For handling time
+use std::{io}; // To use errors
+
+// Constants
+/// Minutes to increase interval by if too frequent requests are made. Set to the minimum allowed by AISHub (1 minute at 2025-11-04).
+const INTERVAL_DEFAULT_INCREMENT: u32 = 1;
 
 fn main() {
     // Startup message
@@ -38,7 +44,21 @@ fn main() {
         let url = make_aishub_url(settings.api_key.as_str(), settings.data_value_format, settings.output_format.as_str(), settings.compression, settings.lat_min, settings.lat_max, settings.lon_min, settings.lon_max, mmsi.as_deref(), imo.as_deref(), settings.age_max);
 
         // Collect data using API
-        let data = get_data_from_aishub_api(url);
+        let data =  match get_data_from_aishub_api(url, &settings) {
+            Ok(d) => d,
+            // Skip this iteration and try again after sleep
+            Err(e) => {
+                // Update update_interval from settings in case it was changed
+                let settings = get_settings();
+                update_interval = settings.update_interval;
+                // Notify user
+                println!("Error getting data from AISHub API: {}\nTrying again after {} minute/s.", e, update_interval);
+                // Wait until next interval
+                std::thread::sleep(std::time::Duration::from_secs((update_interval * 60) as u64));
+                // Continue to next iteration
+                continue;
+            }
+        };
 
         // Store data in database
         match save_data(data) {
@@ -56,7 +76,7 @@ fn main() {
 // Structs
 // --------------------------------------------------------------------------------------
 /// The user settings the program needs to make the API requests
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Settings {
     api_key: String,
     update_interval: u32,
@@ -171,6 +191,20 @@ fn get_settings() -> Settings {
     return settings;
 }
 
+/// Sets the settings in the settings file
+fn set_settings(settings: &Settings) {
+    // Serialize settings to JSON
+    let contents = serde_json::to_string_pretty(&settings).expect("Error serializing settings to JSON");
+
+    // Write settings to settings.json file
+    match fs::write("settings.json", contents) {
+        Ok(_) => {},
+        Err(e) => {
+            panic!("Error writing settings to settings.json file: {}", e);
+        }
+    };
+}
+
 /// Gets list of ships to monitor from ships.csv file
 /// Returns a tuple of two vectors: (mmsi_numbers, imo_numbers)
 /// Prioritizes IMO numbers over MMSI numbers so if both are provided, IMO is used
@@ -191,7 +225,9 @@ fn get_list_of_ships() -> (Vec<String>, Vec<String>) {
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                panic!("Error reading record from ships.csv file: {}", e);
+                // Notify user and skip this record
+                println!("Error reading record from ships.csv file, ignoring and moving on.\nRecord ignored: {}", e);
+                continue;
             }
         };
         // If imo number is provided, add to imo vector
@@ -271,25 +307,30 @@ fn make_aishub_url(api_key: &str, data_value_format: u8, output_format: &str, co
 
 /// Function that fetches data from AISHub API given a URL
 /// Assumes only 1 data point is returned per ship
-fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
+fn get_data_from_aishub_api(url: String, settings: &Settings) -> Result<Vec<VesselInfo>, io::Error> {
     // Get the result of the request
     let body = match reqwest::blocking::get(url) {
         Ok(response) => {
             match response.text() {
                 Ok(text) => text,
                 Err(e) => {
-                    panic!("Error reading response text: {}", e);
+                    return Err(io::Error::new(io::ErrorKind::Other, std::format!("Error reading response text: {}", e)));
                 }
             }
         },
         Err(e) => {
-            panic!("Error making request to AISHub API: {}", e);
+            return Err(io::Error::new(io::ErrorKind::Other, std::format!("Error making request to AISHub API: {}", e)));
         }
     };
 
     // If too frequent requests are made, stop running
     if body == "Too frequent requests!" {
-        panic!("Too frequent requests made to AISHub API. Stopping program. Please check your update interval and make sure it is big enough.");
+        // Increase update interval by 1 and return error
+        let mut settings_modified = settings.clone();
+        settings_modified.update_interval += INTERVAL_DEFAULT_INCREMENT;
+        set_settings(&settings_modified);
+        println!("Too frequent requests made to AISHub API. Increasing update interval in settings by {} minute. Please check your update interval and make sure it is big enough.", INTERVAL_DEFAULT_INCREMENT);
+        return Err(io::Error::new(io::ErrorKind::QuotaExceeded, body));
     }
 
     // Get CSV reader from body
@@ -307,7 +348,9 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                panic!("Error reading record from CSV response: {}", e);
+                // Notify user and skip this record
+                println!("Error reading record from CSV response, ignoring and moving on.\nRecord ignored: {}", e);
+                continue;
             }
         };
         
@@ -409,7 +452,7 @@ fn get_data_from_aishub_api(url: String) -> Vec<VesselInfo> {
     }
 
     // Return the data vector
-    return data;
+    return Ok(data);
 }
 
 /// Gets the order of headers in the CSV response
@@ -444,7 +487,7 @@ fn get_header_order(headers: &csv::StringRecord) -> Vec<Option<usize>> {
             "SOG" =>            order[19] = Some(i),
             "TSTAMP" =>         order[20] = Some(i),    // Timestamp header is "TSTAMP"
             "TYPE" =>           order[21] = Some(i),    // Vessel type header is "TYPE"
-            _ => {panic!("Unknown header in CSV response: {}", header);}
+            _ => {println!("Ignoring unknown header in CSV response: {}.\nIf this header is needed, please submit an issue to the aishub_data_collector github repository:\nhttps://github.com/G0rocks/aishub_data_collector/issues.", header);}
         }
     }
 
@@ -574,8 +617,6 @@ fn save_data(data: Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
 }
 
-
-
 /// Makes a new empty .csv file with the correct headers in the correct order
 fn make_empty_csv_file(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Sanity check the file_path ends with ".csv"
@@ -593,7 +634,6 @@ fn make_empty_csv_file(file_path: &str) -> Result<(), Box<dyn std::error::Error>
     // Return Ok
     return Ok(());
 }
-
 
 /// Writes data to file given a csv writer
 fn write_data_to_file(wtr: &mut csv::Writer<std::fs::File>, vessel: &VesselInfo) -> Result<(), Box<dyn std::error::Error>> {
