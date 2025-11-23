@@ -1,12 +1,13 @@
 {
+    "age_max": null,
     "api_key": "abcd1234",
-    "update_interval": 1,
-    "data_value_format": 0,
-    "output_format": "csv",
     "compression": null,
+    "data_value_format": 0,
+    "filter_by_navstat": false,
     "lat_min": null,
     "lat_max": null,
     "lon_min": null,
     "lon_max": null,
-    "age_max": null
+    "output_format": "csv",
+    "update_interval": 1
 }
