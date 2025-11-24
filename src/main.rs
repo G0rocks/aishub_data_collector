@@ -34,7 +34,9 @@ fn main() {
     // Infinite loop to collect data periodically
     loop {
         // Print status message
-        println!("{:?} - Collecting data from AISHub for {}", time::UtcDateTime::now(), time::UtcDateTime::now() - start_time);
+        let now = time::UtcDateTime::now();
+        let runtime = now - start_time;
+        println!("{}-{:02}-{:02} {:02}:{:02}:{:02} - Collecting data from AISHub for {:.1}", now.year(), now.month() as u8, now.day(), now.hour(), now.minute(), now.second(), runtime);
         // Get settings from settings file
         let settings = get_settings();
         // Update update_interval from settings
