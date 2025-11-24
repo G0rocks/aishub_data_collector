@@ -524,15 +524,17 @@ fn save_data(data: Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
         if vessel.imo != 0 {
             // Enter folder
             std::env::set_current_dir("imo")?;
+            // Create filename
+            let filename = format!("{}_{}.csv", vessel.name, vessel.imo);
 
             // Check if file exists, if not create it with headers
-            if !std::path::Path::new(&format!("{}.csv", vessel.imo)).exists() {
+            if !std::path::Path::new(&filename).exists() {
                 // Create file with headers
-                make_empty_csv_file(format!("{}.csv", vessel.imo).as_str())?;
+                make_empty_csv_file(filename.as_str())?;
             }
          
             // Make csv file reader
-            let reader = csv::Reader::from_path(format!("{}.csv", vessel.imo).as_str())?;
+            let reader = csv::Reader::from_path(filename.as_str())?;
 
             // Get latest timestamp in last line of file
             let latest_timestamp: u64 = match reader.into_records().last() {
@@ -551,7 +553,7 @@ fn save_data(data: Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Make file csv writer
-            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(format!("{}.csv", vessel.imo).as_str())?);
+            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(filename.as_str())?);
 
             // Append data to file
             match write_data_to_file(&mut wtr, &vessel) {
@@ -568,15 +570,17 @@ fn save_data(data: Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
         else if vessel.mmsi != 0 {
             // Enter folder
             std::env::set_current_dir("mmsi")?;
+            // Create filename
+            let filename = format!("{}_{}.csv", vessel.name, vessel.mmsi);
 
             // Check if file exists, if not create it with headers
-            if !std::path::Path::new(&format!("{}.csv", vessel.mmsi)).exists() {
+            if !std::path::Path::new(&filename).exists() {
                 // Create file with headers
-                make_empty_csv_file(format!("{}.csv", vessel.mmsi).as_str())?;
+                make_empty_csv_file(filename.as_str())?;
             }
          
             // Make csv file reader
-            let reader = csv::Reader::from_path(format!("{}.csv", vessel.mmsi).as_str())?;
+            let reader = csv::Reader::from_path(filename.as_str())?;
 
             // Get latest timestamp in last line of file
             let latest_timestamp: u64 = match reader.into_records().last() {
@@ -595,7 +599,7 @@ fn save_data(data: Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Make file csv writer
-            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(format!("{}.csv", vessel.mmsi).as_str())?);
+            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(filename.as_str())?);
 
             // Append data to file
             match write_data_to_file(&mut wtr, &vessel) {
