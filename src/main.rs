@@ -16,6 +16,8 @@ use std::{io}; // To use errors
 // Constants
 /// Minutes to increase interval by if too frequent requests are made. Set to the minimum allowed by AISHub (1 minute at 2025-11-04).
 const INTERVAL_DEFAULT_INCREMENT: u32 = 1;
+/// List of invalid filename characters to be replaced with an underscore
+const INVALID_FILENAME_CHARACTERS: [char; 9] = ['\\', '/',':','*','?','"','<','>','|'];
 
 fn main() {
     // Startup message
@@ -81,7 +83,17 @@ fn main() {
         match save_data(&data) {
             Ok(_) => {},
             Err(e) => {
-                println!("Error saving data to database. Ignoring and continuing.\nError message: {}\nData: {:?}", e, &data);
+                let mut filename_imo: Vec<String> = Vec::new();
+                let mut filename_mmsi: Vec<String> = Vec::new();
+
+                for vessel in &data {
+                    if vessel.imo != 0 {
+                        filename_imo.push(make_filename(vessel.name.as_str(), vessel.imo));
+                    } else if vessel.mmsi != 0 {
+                        filename_mmsi.push(make_filename(vessel.name.as_str(), vessel.mmsi));
+                    }
+                }
+                println!("Error saving data to database.\nPotential troublemaking filenames:\n - {:?}\n - {:?}\nIgnoring and continuing.\nError message: {}\nData: {:?}", filename_imo, filename_mmsi, e, &data);
             }
         };
 
@@ -542,7 +554,7 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
             // Enter folder
             std::env::set_current_dir("imo")?;
             // Create filename
-            let filename = format!("{}_{}.csv", vessel.name, vessel.imo);
+            let filename = make_filename(vessel.name.as_str(), vessel.imo);
 
             // Check if file exists, if not create it with headers
             if !std::path::Path::new(&filename).exists() {
@@ -588,7 +600,7 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
             // Enter folder
             std::env::set_current_dir("mmsi")?;
             // Create filename
-            let filename = format!("{}_{}.csv", vessel.name, vessel.mmsi);
+            let filename = make_filename(vessel.name.as_str(), vessel.mmsi);
 
             // Check if file exists, if not create it with headers
             if !std::path::Path::new(&filename).exists() {
@@ -687,4 +699,19 @@ fn write_data_to_file(wtr: &mut csv::Writer<std::fs::File>, vessel: &VesselInfo)
 
     // Return Ok
     return Ok(());
+}
+
+/// Function that makes valid filenames for vessels.
+/// To make the filenames valid sometimes characters are replaced with an underscore
+fn make_filename(vessel_name: &str, suffix_number: u64) -> String {
+    // Init filename
+    let mut filename = format!("{}_{}.csv", vessel_name, suffix_number);
+    
+    // Replace all invalid characters with underscore
+    for invalid_char in INVALID_FILENAME_CHARACTERS.iter() {
+        filename = filename.replace(*invalid_char, "_");
+    }
+
+    // Return filename
+    return filename;
 }
