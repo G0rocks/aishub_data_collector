@@ -31,14 +31,26 @@ fn main() {
     let imo = vec_to_comma_separated_string(&imo_nums);
     let mmsi = vec_to_comma_separated_string(&mmsi_nums);
 
+    // Initialize settings
+    let mut settings: Settings = match get_settings() {
+        Ok(s) => s,
+        Err(e) => {
+            panic!("Error getting initial settings from settings.json file: {}", e);
+        }
+    };
+
     // Infinite loop to collect data periodically
     loop {
         // Print status message
         let now = time::UtcDateTime::now();
         let runtime = now - start_time;
         println!("{}-{:02}-{:02} {:02}:{:02}:{:02} - Collecting data from AISHub for {:.1}", now.year(), now.month() as u8, now.day(), now.hour(), now.minute(), now.second(), runtime);
-        // Get settings from settings file
-        let settings = get_settings();
+        // update settings from settings file in case they changed
+        match get_settings() {
+            Ok(s) => settings = s,
+            Err(e) => println!("Error getting settings from settings.json file: {}\nUsing previous settings.", e),
+        };
+
         // Update update_interval from settings
         update_interval = settings.update_interval;
 
@@ -50,8 +62,11 @@ fn main() {
             Ok(d) => d,
             // Skip this iteration and try again after sleep
             Err(e) => {
-                // Update update_interval from settings in case it was changed
-                let settings = get_settings();
+                // Update update_interval from settings in case it was changed, check if updated settings
+                match get_settings() {
+                    Ok(s) => settings = s,
+                    Err(e) => println!("Error getting settings from settings.json file: {}\nUsing previous settings.", e),
+                };
                 update_interval = settings.update_interval;
                 // Notify user
                 println!("Error getting data from AISHub API: {}\nTrying again after {} minute/s.", e, update_interval);
@@ -179,18 +194,18 @@ impl VesselInfo {
 
 /// Gets settings from settings file
 /// API key, loop interval (in minutes)
-fn get_settings() -> Settings {
+fn get_settings() -> Result<Settings, io::Error> {
     // Parse settings.json file
     let contents = match fs::read_to_string("settings.json") {
         Ok(c) => c,
         Err(e) => {
-            panic!("Error reading settings.json file: {}", e);
+            return Err(io::Error::new(io::ErrorKind::NotFound, std::format!("Error reading settings.json file: {}", e)));
         }
     };
     let settings: Settings = serde_json::from_str(&contents).expect("Error parsing settings.json file");
 
     // Return settings
-    return settings;
+    return Ok(settings);
 }
 
 /// Sets the settings in the settings file
