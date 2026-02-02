@@ -1,7 +1,14 @@
 [package]
 name = "AISHub-data-collector"
-version = "0.1.0"
+version = "1.1.0"
 edition = "2024"
+license = "GPL-3.0-or-later"
+description = "A tool to fetch and store data from https://www.aishub.net/"
+repository = "https://github.com/G0rocks/aishub_data_collector"
+categories = ["Science", "API bindings"]
+keywords = ["engineering", "shipping", "marine", "data collection"]
+readme = "README.md"
+
 
 [dependencies]
 csv = "1.4.0"
