@@ -6,7 +6,7 @@ license = "GPL-3.0-or-later"
 description = "A tool to fetch and store data from https://www.aishub.net/"
 repository = "https://github.com/G0rocks/aishub_data_collector"
 categories = ["Science", "API bindings"]
-keywords = ["engineering", "shipping", "marine", "AIS", "AISHub", "data collector"]
+keywords = ["shipping", "marine", "AIS", "AISHub", "data collector"]
 readme = "README.md"
 
 
