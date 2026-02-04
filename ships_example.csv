@@ -1,4 +1,4 @@
-imo,mmsi
-123,
-,456
-789,123
+imo;mmsi;notes
+123;
+;456;my favorite ship
+789;123
