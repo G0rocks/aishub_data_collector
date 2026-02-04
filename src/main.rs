@@ -30,8 +30,8 @@ fn main() {
 
     // Get list of ships to monitor
     let (imo_nums, mmsi_nums) = get_list_of_ships();
-    let imo = vec_to_comma_separated_string(&imo_nums);
-    let mmsi = vec_to_comma_separated_string(&mmsi_nums);
+    let imo = vec_to_delimiter_separated_string(&imo_nums, ';');
+    let mmsi = vec_to_delimiter_separated_string(&mmsi_nums, ';');
 
     // Initialize settings
     let mut settings: Settings = match get_settings() {
@@ -238,16 +238,19 @@ fn set_settings(settings: &Settings) {
 /// Returns a tuple of two vectors: (mmsi_numbers, imo_numbers)
 /// Prioritizes IMO numbers over MMSI numbers so if both are provided, IMO is used
 fn get_list_of_ships() -> (Vec<String>, Vec<String>) {
+    println!("Getting list of ships!");
     let mut mmsi: Vec<String> = Vec::new();
     let mut imo: Vec<String> = Vec::new();
 
     // Read ships.csv file
-    let mut rdr = match csv::Reader::from_path("ships.csv") {
-        Ok(r) => r,
-        Err(e) => {
-            panic!("Error reading ships.csv file: {}", e);
-        }
-    };
+    let mut rdr = match csv::ReaderBuilder::new()
+        // Allow variable number of fields per record
+        .flexible(true)
+        .has_headers(true)
+        .from_path("ships.csv") {
+            Ok(r) => r,
+            Err(e) => panic!("Error reading ships.csv file: {}", e),
+        };
 
     // For each entry, if MMSI or IMO is provided, add to respective vector
     for result in rdr.records() {
@@ -275,9 +278,9 @@ fn get_list_of_ships() -> (Vec<String>, Vec<String>) {
     return (imo, mmsi);
 }
 
-/// Takes in a vector of strings and returns a single string with commas between the values
-/// E.g. ["123", "456", "789"] -> "123,456,789"
-fn vec_to_comma_separated_string(vec: &Vec<String>) -> Option<String> {
+/// Takes in a vector of strings and returns a single string with the delimiter between the values
+/// E.g. if the delimiter is a semicomma: ["123", "456", "789"] -> "123;456;789"
+fn vec_to_delimiter_separated_string(vec: &Vec<String>, delimiter: char) -> Option<String> {
     // Return None if vector is empty
     if vec.is_empty() {
         return None;
@@ -288,7 +291,7 @@ fn vec_to_comma_separated_string(vec: &Vec<String>) -> Option<String> {
     for (i, value) in vec.iter().enumerate() {
         result.push_str(value);
         if i < vec.len() - 1 {
-            result.push_str(","); // Add comma if not the last value
+            result.push(delimiter); // Add delimiter if not the last value
         }
     }
 
@@ -582,7 +585,12 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Make file csv writer
-            let mut wtr = csv::Writer::from_writer(fs::OpenOptions::new().append(true).open(filename.as_str())?);
+            let mut wtr = csv::WriterBuilder::new()
+                .delimiter(b';')
+                .from_writer(fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(filename.as_str())?);
 
             // Append data to file
             match write_data_to_file(&mut wtr, &vessel) {
@@ -658,7 +666,9 @@ fn make_empty_csv_file(file_path: &str) -> Result<(), Box<dyn std::error::Error>
     }
 
     // Create CSV writer
-    let mut wtr = csv::Writer::from_path(file_path)?;
+    let mut wtr = csv::WriterBuilder::new()
+        .delimiter(b';')
+        .from_path(file_path)?;
 
     // Write headers
     wtr.write_record(&["A", "B", "C", "CALLSIGN", "COG", "D", "DEST", "DRAUGHT", "DEVICE", "ETA", "HEADING", "IMO", "LATITUDE", "LONGITUDE", "MMSI", "NAME", "NAVSTAT", "PAC", "ROT", "SOG", "TSTAMP", "TYPE"])?;
