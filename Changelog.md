@@ -22,7 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 
 
-## [1.1.0]
+## [2.0.0] - 2026-02-04
+
+### Added
+- ship.csv file now also has notes
+
+### Changed
+- Now saves data in csv files with semicomma separated values instead of comma separated values. This means all csv files use semicomma delimiters now.
+- Replaced the vec_to_comma_separated_string function with vec_to_delimiter_separated_string function which allows custom delimiters to be set.
+
+## [v1.1.0] - 2025-11-27
 
 ### Added
 
@@ -45,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Now uses previously used settings if unable to read current settings so it can only crash if it does not work initially which is great. See issue #8
 - Improved error message when problems with saving data. See issue #8
 
-## [1.0.0] - 2025-10-23
+## [v1.0.0] - 2025-10-23
 The first release is out!
 We have some structs and enums and the capability to download data from AISHub to csv files continuously.
 Glad to be here :)
@@ -67,5 +76,7 @@ Glad to be here :)
 - Nothing was removed
 
 ## List of releases
-[unreleased]: https://github.com/G0rocks/marine_vessel_simulator/compare/v1.0.0...main
+[unreleased]: https://github.com/G0rocks/marine_vessel_simulator/compare/2.0.0...main
+[2.0.0]: https://github.com/G0rocks/marine_vessel_simulator/releases/tag/2.0.0
+[1.1.0]: https://github.com/G0rocks/marine_vessel_simulator/releases/tag/v1.1.0
 [1.0.0]: https://github.com/G0rocks/marine_vessel_simulator/releases/tag/v1.0.0
