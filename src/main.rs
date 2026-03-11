@@ -532,6 +532,7 @@ fn get_header_order(headers: &csv::StringRecord) -> Vec<Option<usize>> {
 /// If the files already exist, appends to them
 /// Note: Prioritizes IMO number over MMSI number, so if both exist, saves to IMO file only
 fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Running save_data: {:?}", data);
     // Check if data folder exists, if not, create it
     if !std::path::Path::new("data").exists() {
         fs::create_dir("data")?;
@@ -565,12 +566,20 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
                 make_empty_csv_file(filename.as_str())?;
             }
          
-            // Make csv file reader
-            let reader = csv::Reader::from_path(filename.as_str())?;
+            // Make csv file reader with correct delimiter and header settings
+            let reader = match csv::ReaderBuilder::new()
+                .has_headers(true)
+                .delimiter(b';')
+                .from_path(filename.as_str()) {
+                    Ok(r) => r,
+                    Err(e) => panic!("Error reading file {}: {}", filename, e),
+                };
 
             // Get latest timestamp in last line of file
             let latest_timestamp: u64 = match reader.into_records().last() {
-                Some(Ok(record)) => record.get(20).expect(format!("Could not get latest timestamp in last line of file: {}", filename).as_str()).parse()?,
+                Some(Ok(record)) => {
+                    println!("{:?}",record);
+                    record.get(20).expect(format!("Could not get latest timestamp in last line of file: {}", filename).as_str()).parse()?},
                 Some(Err(e)) => {
                     return Err(Box::from(format!("Error reading record from CSV file: {}", e)));
                 }
@@ -617,7 +626,13 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
             }
          
             // Make csv file reader
-            let reader = csv::Reader::from_path(filename.as_str())?;
+            let reader = match csv::ReaderBuilder::new()
+                .has_headers(true)
+                .delimiter(b';')
+                .from_path(filename.as_str()) {
+                    Ok(r) => r,
+                    Err(e) => panic!("Error reading file {}: {}", filename, e),
+                };
 
             // Get latest timestamp in last line of file
             let latest_timestamp: u64 = match reader.into_records().last() {
