@@ -532,7 +532,6 @@ fn get_header_order(headers: &csv::StringRecord) -> Vec<Option<usize>> {
 /// If the files already exist, appends to them
 /// Note: Prioritizes IMO number over MMSI number, so if both exist, saves to IMO file only
 fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Running save_data: {:?}", data);
     // Check if data folder exists, if not, create it
     if !std::path::Path::new("data").exists() {
         fs::create_dir("data")?;
@@ -577,9 +576,7 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
 
             // Get latest timestamp in last line of file
             let latest_timestamp: u64 = match reader.into_records().last() {
-                Some(Ok(record)) => {
-                    println!("{:?}",record);
-                    record.get(20).expect(format!("Could not get latest timestamp in last line of file: {}", filename).as_str()).parse()?},
+                Some(Ok(record)) => record.get(20).expect(format!("Could not get latest timestamp in last line of file: {}", filename).as_str()).parse()?,
                 Some(Err(e)) => {
                     return Err(Box::from(format!("Error reading record from CSV file: {}", e)));
                 }
