@@ -532,7 +532,6 @@ fn get_header_order(headers: &csv::StringRecord) -> Vec<Option<usize>> {
 /// If the files already exist, appends to them
 /// Note: Prioritizes IMO number over MMSI number, so if both exist, saves to IMO file only
 fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Running save_data: {:?}", data);
     // Check if data folder exists, if not, create it
     if !std::path::Path::new("data").exists() {
         fs::create_dir("data")?;
