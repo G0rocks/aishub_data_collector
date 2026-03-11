@@ -570,7 +570,7 @@ fn save_data(data: &Vec<VesselInfo>) -> Result<(), Box<dyn std::error::Error>> {
 
             // Get latest timestamp in last line of file
             let latest_timestamp: u64 = match reader.into_records().last() {
-                Some(Ok(record)) => record.get(20).expect("Could not get latest timestamp in last line of file").parse()?,
+                Some(Ok(record)) => record.get(20).expect(format!("Could not get latest timestamp in last line of file: {}", filename)).parse()?,
                 Some(Err(e)) => {
                     return Err(Box::from(format!("Error reading record from CSV file: {}", e)));
                 }
